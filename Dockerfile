@@ -4,10 +4,12 @@ WORKDIR /app
 RUN apk add --no-cache openssl
 
 COPY package*.json ./
-COPY src ./src
-COPY database ./database
-
 RUN npm install
+
+COPY prisma ./prisma
+RUN npx prisma generate
+
+COPY src ./src
 
 EXPOSE 3003
 CMD ["node", "src/index.js"]

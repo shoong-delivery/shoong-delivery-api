@@ -8,12 +8,17 @@ const prisma = new PrismaClient();
 const app = express();
 app.use(express.json());
 
+const cors = require("cors");
+app.use(cors());
+
+// Health Check (EKS probe용)
+app.get("/health", (req, res) => res.json({ status: "ok" }));
+
 // 배달 시작: POST /delivery/assign
 app.post("/delivery/assign", async (req, res) => {
   try {
     const { order_id } = req.body;
 
-    // order에서 user_id 조회
     const order = await prisma.order.findUnique({
       where: { id: order_id },
     });
@@ -26,13 +31,11 @@ app.post("/delivery/assign", async (req, res) => {
       },
     });
 
-    // Order 상태 변경
     await axios.patch(`${process.env.ORDER_URL}/orders/${order_id}/status`, {
       status: "DELIVERING",
     });
 
-    // Notification 호출
-    await axios.post(`${process.env.NOTIFICATION_URL}/notify`, {
+    await axios.post(`${process.env.NOTIFICATION_URL}/alarms`, {
       type: "delivery",
       message: "배달이 시작되었습니다",
       user_id: order.user_id,
@@ -51,7 +54,6 @@ app.post("/delivery/complete", async (req, res) => {
   try {
     const { order_id } = req.body;
 
-    // order에서 user_id 조회
     const order = await prisma.order.findUnique({
       where: { id: order_id },
     });
@@ -64,13 +66,11 @@ app.post("/delivery/complete", async (req, res) => {
       },
     });
 
-    // Order 상태 변경
     await axios.patch(`${process.env.ORDER_URL}/orders/${order_id}/status`, {
       status: "DELIVERED",
     });
 
-    // Notification 호출
-    await axios.post(`${process.env.NOTIFICATION_URL}/notify`, {
+    await axios.post(`${process.env.NOTIFICATION_URL}/alarms`, {
       type: "delivery",
       message: "배달이 완료되었습니다",
       user_id: order.user_id,
@@ -84,6 +84,12 @@ app.post("/delivery/complete", async (req, res) => {
   }
 });
 
-app.listen(process.env.PORT, () =>
-  console.log(`[delivery-service] :${process.env.PORT}`),
+const server = app.listen(process.env.PORT, () =>
+  console.log(`[delivery-service] :${process.env.PORT}`)
 );
+
+process.on("SIGTERM", async () => {
+  console.log("[delivery-service] SIGTERM received, shutting down...");
+  await prisma.$disconnect();
+  server.close(() => process.exit(0));
+});
