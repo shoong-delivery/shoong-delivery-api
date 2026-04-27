@@ -31,11 +31,11 @@ app.post("/assign", async (req, res) => {
       },
     });
 
-    await axios.patch(`${process.env.ORDER_API_URL}/order/${order_id}/status`, {
+    await axios.patch(`${process.env.ORDER_API_URL}/${order_id}/status`, {
       status: "DELIVERING",
     });
 
-    await axios.post(`${process.env.NOTIFICATION_API_URL}/notify`, {
+    await axios.post(`${process.env.NOTIFICATION_API_URL}`, {
       type: "delivery",
       message: "배달이 시작되었습니다",
       user_id: order.user_id,
@@ -66,11 +66,11 @@ app.post("/complete", async (req, res) => {
       },
     });
 
-    await axios.patch(`${process.env.ORDER_API_URL}/order/${order_id}/status`, {
+    await axios.patch(`${process.env.ORDER_API_URL}/${order_id}/status`, {
       status: "DELIVERED",
     });
 
-    await axios.post(`${process.env.NOTIFICATION_API_URL}/notify`, {
+    await axios.post(`${process.env.NOTIFICATION_API_URL}`, {
       type: "delivery",
       message: "배달이 완료되었습니다",
       user_id: order.user_id,
