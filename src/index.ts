@@ -72,8 +72,9 @@ app.post('/complete', async (req: Request, res: Response) => {
   }
 });
 
-const server = app.listen(process.env.PORT, () =>
-  console.log(`[delivery-service] :${process.env.PORT}`)
+const PORT = process.env.PORT || 3003;
+const server = app.listen(PORT, () =>
+  console.log(`[delivery-service] :${PORT}`)
 );
 
 process.on('SIGTERM', async () => {
