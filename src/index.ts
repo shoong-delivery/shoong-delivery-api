@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import axios from 'axios';
 import cors from 'cors';
+import pinoHttp from 'pino-http';
 import { PrismaClient } from '@prisma/client';
 import {
   registry,
@@ -9,11 +10,25 @@ import {
   deliveryCompleteTotal,
   deliveryDurationSeconds,
 } from './metrics';
+import { logger } from './logger';
 
 const prisma = new PrismaClient();
 const app = express();
 app.use(express.json());
 app.use(cors());
+app.use(
+  pinoHttp({
+    logger,
+    autoLogging: {
+      ignore: (req) => req.url === '/health' || req.url === '/metrics',
+    },
+    customLogLevel: (_req, res, err) => {
+      if (err || res.statusCode >= 500) return 'error';
+      if (res.statusCode >= 400) return 'warn';
+      return 'info';
+    },
+  }),
+);
 
 // Health Check
 app.get('/health', (_req: Request, res: Response) => res.json({ status: 'ok' }));
@@ -24,7 +39,7 @@ app.get('/metrics', async (_req: Request, res: Response) => {
     res.set('Content-Type', registry.contentType);
     res.end(await registry.metrics());
   } catch (err) {
-    console.error('[metrics] error -', (err as Error).message);
+    logger.error({ err }, '[metrics] read failed');
     res.status(500).end();
   }
 });
@@ -53,10 +68,11 @@ app.post('/assign', async (req: Request, res: Response) => {
     });
 
     deliveryAssignTotal.labels('success').inc();
+    logger.info({ order_id, delivery_id: delivery.id }, 'delivery assign');
     res.status(201).json({ success: true, data: delivery });
   } catch (err) {
     deliveryAssignTotal.labels('fail').inc();
-    console.error(err);
+    logger.error({ err }, 'delivery assign failed');
     res.status(500).json({ success: false, error: (err as Error).message });
   }
 });
@@ -100,21 +116,22 @@ app.post('/complete', async (req: Request, res: Response) => {
     });
 
     deliveryCompleteTotal.labels('success').inc();
+    logger.info({ order_id }, 'delivery complete');
     res.json({ success: true, data: delivery });
   } catch (err) {
     deliveryCompleteTotal.labels('fail').inc();
-    console.error(err);
+    logger.error({ err }, 'delivery complete failed');
     res.status(500).json({ success: false, error: (err as Error).message });
   }
 });
 
 const PORT = process.env.PORT || 3003;
 const server = app.listen(PORT, () =>
-  console.log(`[delivery-service] :${PORT}`)
+  logger.info({ port: PORT }, 'delivery-service listening'),
 );
 
 process.on('SIGTERM', async () => {
-  console.log('[delivery-service] SIGTERM received, shutting down...');
+  logger.info('SIGTERM received, shutting down');
   await prisma.$disconnect();
   server.close(() => process.exit(0));
 });
